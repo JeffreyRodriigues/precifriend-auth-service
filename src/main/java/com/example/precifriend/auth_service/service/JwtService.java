@@ -1,33 +1,46 @@
 package com.example.precifriend.auth_service.service;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+import javax.crypto.SecretKey;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class JwtService {
 
-    private final String SECRET_KEY = "93d694d0e1a61908336e634d6edb2413f9382b56c8efcbb150839caf083c5ae6";
+    @Value("${jwt.secret}")
+    private String secret;
+
+    private SecretKey secretKey;
+
+    @PostConstruct
+    public void init() {
+        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
 
     public String generateToken(String username) {
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60)) // 1h
-                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
-                .compact();
+            .setSubject(username)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + 86400000)) // 1 dia
+            .signWith(secretKey)
+            .compact();
     }
 
     public String extractUsername(String token) {
-        return Jwts.parser()
-                .setSigningKey(SECRET_KEY)
-                .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+        return Jwts.parserBuilder()
+            .setSigningKey(secretKey)
+            .build()
+            .parseClaimsJws(token)
+            .getBody()
+            .getSubject();
     }
 
     public boolean validateToken(String token, String username) {
@@ -38,13 +51,13 @@ public class JwtService {
         }
     }
 
-
     private boolean isTokenExpired(String token) {
-        return Jwts.parser()
-                .setSigningKey(SECRET_KEY)
-                .parseClaimsJws(token)
-                .getBody()
-                .getExpiration()
-                .before(new Date());
+        Date expiration = Jwts.parserBuilder()
+            .setSigningKey(secretKey)
+            .build()
+            .parseClaimsJws(token)
+            .getBody()
+            .getExpiration();
+        return expiration.before(new Date());
     }
 }
